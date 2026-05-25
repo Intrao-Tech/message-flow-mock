@@ -139,19 +139,28 @@ function SoundWave({ active }: { active: boolean }) {
   );
 }
 
+const SR_CTOR: any =
+  typeof window !== "undefined"
+    ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    : null;
+const SPEECH_SUPPORTED = Boolean(SR_CTOR);
+
 export function VoiceAssistantView() {
   const [selectedId, setSelectedId] = useState(EXECUTIVES[0].id);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [status, setStatus] = useState<Status>("idle");
   const [input, setInput] = useState("");
   const [listening, setListening] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
   const [pointers, setPointers] = useState<Record<string, number>>({
     ceo: 0,
     cso: 0,
     cfo: 0,
   });
   const recognitionRef = useRef<any>(null);
+  const finalTextRef = useRef<string>("");
   const feedRef = useRef<HTMLDivElement>(null);
+  const selectedIdRef = useRef(selectedId);
 
   const selected = useMemo(
     () => EXECUTIVES.find((e) => e.id === selectedId)!,
@@ -162,6 +171,40 @@ export function VoiceAssistantView() {
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: "smooth" });
   }, [feed.length, status]);
+
+  // Stop any active recognition when switching executive or unmounting.
+  const stopRecognition = () => {
+    const rec = recognitionRef.current;
+    if (rec) {
+      try {
+        rec.onresult = null;
+        rec.onend = null;
+        rec.onerror = null;
+        rec.stop();
+      } catch {
+        /* ignore */
+      }
+      recognitionRef.current = null;
+    }
+    setListening(false);
+  };
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+    stopRecognition();
+    setInput("");
+    finalTextRef.current = "";
+    setStatus("idle");
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  useEffect(() => {
+    return () => {
+      stopRecognition();
+      if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    };
+  }, []);
 
   const speak = (text: string) => {
     try {
@@ -181,16 +224,21 @@ export function VoiceAssistantView() {
     const q = question.trim();
     if (!q) return;
     setInput("");
-    const execId = selectedId;
+    finalTextRef.current = "";
+    const execId = selectedIdRef.current;
+    const exec = EXECUTIVES.find((e) => e.id === execId)!;
     const userMsg: Msg = { id: crypto.randomUUID(), role: "user", text: q, execId };
     setMessages((m) => [...m, userMsg]);
     setStatus("thinking");
 
     setTimeout(() => {
       setStatus("speaking");
-      const idx = pointers[execId] ?? 0;
-      const answer = selected.answers[idx % selected.answers.length];
-      setPointers((p) => ({ ...p, [execId]: (idx + 1) % selected.answers.length }));
+      let idx = 0;
+      setPointers((p) => {
+        idx = p[execId] ?? 0;
+        return { ...p, [execId]: (idx + 1) % exec.answers.length };
+      });
+      const answer = exec.answers[idx % exec.answers.length];
       const aiMsg: Msg = {
         id: crypto.randomUUID(),
         role: "assistant",
@@ -205,50 +253,74 @@ export function VoiceAssistantView() {
   };
 
   const startListening = () => {
-    const SR =
-      (typeof window !== "undefined" &&
-        ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)) ||
-      null;
-    if (!SR) {
-      alert("Розпізнавання мовлення не підтримується. Використайте текстове поле.");
-      return;
-    }
+    if (!SPEECH_SUPPORTED) return;
     if (listening) {
-      recognitionRef.current?.stop();
+      stopRecognition();
       return;
     }
-    const rec = new SR();
+    setMicError(null);
+    finalTextRef.current = "";
+    setInput("");
+
+    const rec = new SR_CTOR();
     rec.lang = "uk-UA";
     rec.interimResults = true;
     rec.continuous = false;
+
     rec.onresult = (e: any) => {
-      let text = "";
-      for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
-      setInput(text);
+      let interim = "";
+      let finalText = finalTextRef.current;
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      finalTextRef.current = finalText;
+      setInput((finalText + interim).trim());
     };
+
+    rec.onerror = (e: any) => {
+      if (e?.error === "not-allowed" || e?.error === "service-not-allowed") {
+        setMicError("Доступ до мікрофона відхилено");
+      } else if (e?.error === "no-speech") {
+        setMicError("Не вдалося розпізнати мовлення");
+      }
+      setListening(false);
+      setStatus("idle");
+      recognitionRef.current = null;
+    };
+
     rec.onend = () => {
       setListening(false);
       setStatus("idle");
-      setInput((current) => {
-        if (current.trim()) handleAsk(current);
-        return current;
-      });
+      const finalQ = finalTextRef.current.trim();
+      recognitionRef.current = null;
+      if (finalQ) handleAsk(finalQ);
     };
-    rec.onerror = () => {
-      setListening(false);
-      setStatus("idle");
-    };
+
     recognitionRef.current = rec;
     setListening(true);
     setStatus("listening");
-    rec.start();
+    try {
+      rec.start();
+    } catch (err) {
+      setListening(false);
+      setStatus("idle");
+      recognitionRef.current = null;
+    }
   };
 
   const reset = () => {
+    stopRecognition();
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     setPointers((p) => ({ ...p, [selectedId]: 0 }));
     setMessages((m) => m.filter((msg) => msg.execId !== selectedId));
     setStatus("idle");
+    setInput("");
+    finalTextRef.current = "";
   };
+
+
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -390,16 +462,27 @@ export function VoiceAssistantView() {
 
           {/* Controls */}
           <div className="mt-5 flex flex-col items-center gap-3">
-            <button
-              onClick={startListening}
-              disabled={status === "thinking" || status === "speaking"}
-              className={`relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-lg transition active:scale-95 disabled:opacity-50 ${
-                listening ? "animate-pulse ring-4 ring-sky-300" : ""
-              }`}
-              aria-label="Записати голос"
-            >
-              <Mic className="h-7 w-7" />
-            </button>
+            {SPEECH_SUPPORTED ? (
+              <button
+                onClick={startListening}
+                disabled={status === "thinking" || status === "speaking"}
+                className={`relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-lg transition active:scale-95 disabled:opacity-50 ${
+                  listening ? "animate-pulse ring-4 ring-sky-300" : ""
+                }`}
+                aria-label={listening ? "Зупинити запис" : "Записати голос"}
+              >
+                <Mic className="h-7 w-7" />
+              </button>
+            ) : (
+              <p className="max-w-sm rounded-lg bg-amber-50 px-3 py-2 text-center text-xs text-amber-800">
+                Голосове введення не підтримується у цьому браузері — скористайтесь
+                полем для тексту.
+              </p>
+            )}
+            {micError && (
+              <p className="text-xs text-rose-600">{micError}</p>
+            )}
+
 
             <form
               onSubmit={(e) => {
