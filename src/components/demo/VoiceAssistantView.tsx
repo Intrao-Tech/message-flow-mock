@@ -462,16 +462,27 @@ export function VoiceAssistantView() {
 
           {/* Controls */}
           <div className="mt-5 flex flex-col items-center gap-3">
-            <button
-              onClick={startListening}
-              disabled={status === "thinking" || status === "speaking"}
-              className={`relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-lg transition active:scale-95 disabled:opacity-50 ${
-                listening ? "animate-pulse ring-4 ring-sky-300" : ""
-              }`}
-              aria-label="Записати голос"
-            >
-              <Mic className="h-7 w-7" />
-            </button>
+            {SPEECH_SUPPORTED ? (
+              <button
+                onClick={startListening}
+                disabled={status === "thinking" || status === "speaking"}
+                className={`relative flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-lg transition active:scale-95 disabled:opacity-50 ${
+                  listening ? "animate-pulse ring-4 ring-sky-300" : ""
+                }`}
+                aria-label={listening ? "Зупинити запис" : "Записати голос"}
+              >
+                <Mic className="h-7 w-7" />
+              </button>
+            ) : (
+              <p className="max-w-sm rounded-lg bg-amber-50 px-3 py-2 text-center text-xs text-amber-800">
+                Голосове введення не підтримується у цьому браузері — скористайтесь
+                полем для тексту.
+              </p>
+            )}
+            {micError && (
+              <p className="text-xs text-rose-600">{micError}</p>
+            )}
+
 
             <form
               onSubmit={(e) => {
