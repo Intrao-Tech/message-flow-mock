@@ -60,6 +60,8 @@ function Index() {
           <div className="hidden lg:block">
             {tab === "report" ? (
               <ReportView />
+            ) : tab === "voice" ? (
+              <VoiceAssistantView />
             ) : (
               <div className="grid grid-cols-2 gap-8">
                 <div>
@@ -85,6 +87,7 @@ function Index() {
             {tab === "sender" && <SenderView />}
             {tab === "recipient" && <RecipientView />}
             {tab === "report" && <ReportView />}
+            {tab === "voice" && <VoiceAssistantView />}
           </div>
         </main>
       </div>
