@@ -5,17 +5,19 @@ import { BroadcastProvider } from "@/lib/broadcast-store";
 import { SenderView } from "@/components/demo/SenderView";
 import { RecipientView } from "@/components/demo/RecipientView";
 import { ReportView } from "@/components/demo/ReportView";
+import { VoiceAssistantView } from "@/components/demo/VoiceAssistantView";
 
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Tab = "sender" | "recipient" | "report";
+type Tab = "sender" | "recipient" | "report" | "voice";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "sender", label: "Співробітник ВК" },
   { id: "recipient", label: "Користувач" },
   { id: "report", label: "Звіт" },
+  { id: "voice", label: "Голосовий помічник" },
 ];
 
 function Index() {
