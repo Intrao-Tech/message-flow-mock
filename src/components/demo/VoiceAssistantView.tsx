@@ -17,7 +17,7 @@ type Executive = {
 const EXECUTIVES: Executive[] = [
   {
     id: "ceo",
-    name: "Юрій Ріженков",
+    name: "Юрій Риженков",
     position: "Головний виконавчий директор (CEO)",
     initials: "ЮР",
     photo: yuriiPhoto,
