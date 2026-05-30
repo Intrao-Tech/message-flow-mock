@@ -35,7 +35,7 @@ const EXECUTIVES: Executive[] = [
   {
     id: "cso",
     name: "Олексій Комлик",
-    position: "Директор зі сталого розвитку (CSO)",
+    position: "Директор зі стратегічних комунікацій",
     initials: "ОК",
     photo: oleksiiPhoto,
     questions: [
